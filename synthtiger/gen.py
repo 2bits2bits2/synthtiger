@@ -8,6 +8,7 @@ import itertools
 import os
 import random
 import sys
+import time
 import traceback
 from multiprocessing import Process, Queue
 
@@ -34,10 +35,13 @@ def read_config(path):
 
 
 def generator(
-    path, name, config=None, count=None, worker=0, seed=None, retry=True, verbose=False
+    path, name, config=None, count=None, worker=0, seed=None, retry=True, verbose=False, progress=True
 ):
     counter = range(count) if count is not None else itertools.count()
     tasks = _task_generator(seed)
+
+    if progress:
+        start_time = time.time()
 
     if worker > 0:
         task_queue = Queue(maxsize=worker)
@@ -54,13 +58,17 @@ def generator(
             task_idx, data = data_queue.get()
             if post_count is None or idx < post_count:
                 task_queue.put(next(tasks))
+            if progress:
+                _print_progress(idx + 1, count, start_time)
             yield task_idx, data
     else:
         template = read_template(path, name, config)
 
-        for _ in counter:
+        for idx in counter:
             task_idx, task_seed = next(tasks)
             data = _generate(template, task_seed, retry, verbose)
+            if progress:
+                _print_progress(idx + 1, count, start_time)
             yield task_idx, data
 
 
@@ -128,3 +136,19 @@ def _generate(template, seed, retry, verbose):
 
     set_global_random_states(states)
     return data
+
+
+def _print_progress(current, total, start_time):
+    elapsed_time = time.time() - start_time
+    progress = current / total if total is not None else 0
+    eta = (elapsed_time / current) * (total - current) if total is not None else float('inf')
+
+    bar_length = 30
+    filled_length = int(bar_length * progress)
+    bar = '=' * filled_length + '-' * (bar_length - filled_length)
+
+    sys.stdout.write(f'\r[{bar}] {current}/{total if total is not None else "inf"} - ETA: {eta:.2f}s')
+    sys.stdout.flush()
+
+    if current == total:
+        print()  # Move to the next line when finished

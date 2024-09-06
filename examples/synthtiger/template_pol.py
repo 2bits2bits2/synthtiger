@@ -170,6 +170,7 @@ class SynthTiger(templates.Template):
         glyph_coords = "\t".join(
             [",".join(map(str, map(int, coord))) for coord in glyph_coords]
         )
+        
 
         shard = str(idx // 10000)
         image_key = os.path.join("images", shard, f"{idx}.jpg")
@@ -216,13 +217,13 @@ class SynthTiger(templates.Template):
 
     def _generate_text(self, color, style):
         label = self.corpus.data(self.corpus.sample())
-
+        label = _randomize_case(label)
         # for script using diacritic, ligature and RTL
         chars = utils.split_text(label, reorder=True)
-        chars = [char.upper() if random.random() < 0.5 else char.lower() for char in chars] # random case
         
 
         text = "".join(chars)
+        
         font = self.font.sample({"text": text, "vertical": self.vertical})
 
         char_layers = [layers.TextLayer(char, **font) for char in chars]
@@ -317,11 +318,24 @@ def _check_visibility(image, mask):
             if peak[y][x]:
                 cv2.floodFill(gray, visit, (x, y), 1, 16, 16, flag)
 
+
     visit = visit[1:-1, 1:-1]
     count = np.sum(visit & border)
     total = np.sum(border)
     return total > 0 and count <= total * 0.1
 
+def _randomize_case(chars, prob=0.5):
+    
+    randomized_chars = []
+    for char in chars:
+        if char.isupper() and random.random() < prob:
+            randomized_chars.append(char.lower())
+        elif char.islower() and random.random() < prob:
+            randomized_chars.append(char.upper())
+        else:
+            randomized_chars.append(char)
+
+    return "".join(randomized_chars)
 
 def _create_poly_mask(image, pad=0):
     height, width = image.shape[:2]
